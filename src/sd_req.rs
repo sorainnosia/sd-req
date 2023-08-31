@@ -191,6 +191,12 @@ impl sd_reqo {
         if args.len() > 0 {
             if args[0].to_lowercase() == "repeat" {
                 repeat = true;
+            } else if args[0].to_lowercase() == "norepeat" {
+                repeat = false;
+            } else {
+                self.print_help();
+                println!("Argument 1 '{}': should be \"repeat\" or \"norepeat\"", args[0].to_string());
+                return;
             }
         }
         if args.len() > 1 {
@@ -198,7 +204,14 @@ impl sd_reqo {
         }
         if args.len() > 2 {
             let x = args[2].to_string();
-            (_, arg_count) = types::str_to_i32(x);
+            let mut b = false;
+            (b, arg_count) = types::str_to_i32(x);
+            
+            if b == false || arg_count <= 0 {
+                self.print_help();
+                println!("Argument 3 '{}': should be positive integer count", args[2].to_string());
+                return;
+            }
         }
 
         let mut first = true;
@@ -325,6 +338,10 @@ impl sd_reqo {
                     json.remove(key.as_str());
 
                     json.insert(args2[x].as_str(), args2[x + 1].as_str());
+                } else {
+                    self.print_help();
+                    println!("API does not contain configuration '{}'", key.as_str());
+                    return;
                 }
                 x = x + 2;
             }

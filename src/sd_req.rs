@@ -1,15 +1,18 @@
+use chrono::Duration;
 use reqwest;
-use std::collections::HashMap;
+use std::collections::{HashMap};
 use std::sync::{Mutex, Arc};
 use std::io;
 use std::env;
 use std::io::*;
 use crate::http::{http_fast_reqwest, path, stringops, types};
 use std::io::Write;
-use serde_json::{Value};
+use serde_json::{Value,Map};
 use base64::{*, engine::general_purpose};
 use close_file::Closable;
 use sanitize_filename;
+use std::thread;
+use std::time;
 
 #[derive(Clone, Debug)]
 pub struct sd_reqo {
@@ -28,6 +31,7 @@ impl sd_reqo {
         let config = r#"
         {
             "url" : "http://127.0.0.1:7860",
+			"model" : "",
             "negative_prompt" : "",
             "steps" : 20,
             "width" : 512,
@@ -151,6 +155,18 @@ impl sd_reqo {
             },
             None => {}
         }
+
+        match k.get(name.as_str()) {
+            Some(x) => {
+                match x.as_object() {
+                    Some (y) => {
+                        return format!("{:?}", y);
+                    },
+                    None => {}
+                }
+            },
+            None => {}
+        }
         return default;
     }
 
@@ -170,6 +186,59 @@ impl sd_reqo {
         println!("   repeat \"rock in a river\" 1 seed 5 negative_prompt \"sand\" steps 50");
         println!("Example 3");
         println!("   norepeat \"rock in a river\" 1");
+    }
+
+    fn change_model(&self, model: String) -> bool {
+        let mut url = String::from("");
+        {
+            let j = &*self.json.lock().unwrap();
+            match j {
+                Some(k) => {
+                    url = self.get_string(k, "url".to_string(), url.to_string());
+                },
+                None => {}
+            }
+        }
+
+        let url2 = format!("{}/sdapi/v1/options", url.to_string());
+        let json_str = http_fast_reqwest::post_json(1, url2.to_string(), "GET".to_string(), HashMap::new());
+        match json_str {
+            Ok(o) => {
+                let val = serde_json::from_str::<Value>(o.as_str());
+                match val {
+                    Ok(mut v) => {
+                        v["sd_model_checkpoint"] = Value::String(model.to_string());
+                        // let mut v2:HashMap<String, String> = HashMap::new();
+                        // v2.insert("sd_model_checkpoint".to_string(), model.to_string());
+
+                        let vstr = serde_json::to_string(&v);
+                        match vstr {
+                            Ok(v) => {
+                                let json2 = http_fast_reqwest::post_body(1, url2.to_string(), "POST".to_string(), "application/json".to_string(), v.to_string());
+                                match json2 {
+                                    Ok(xx) => {
+                                        return true;
+                                    },
+                                    Err(xy) => {
+                                        println!("Invalid result from change_model : {:?}", xy);
+                                    }
+                                }
+                            },
+                            Err(xz) => {
+                                println!("Invalid json to string : {:?}", xz);
+                            }
+                        }
+                    },
+                    Err(xu) => {
+                        println!("Invalid options json : {:?}", xu);
+                    }
+                }
+            },
+            Err(xr) => { 
+                println!("No json returned from options : {}", xr);
+            }
+        }
+        return false;
     }
 
     pub fn sdcall(&self) {
@@ -243,6 +312,7 @@ impl sd_reqo {
             if arg_count == 0 { arg_count = 1; }
             
             let mut negative_prompt = String::from("");
+			let mut model = "".to_string();
             let mut steps = "20".to_string();
             let mut width = "512".to_string();
             let mut height = "512".to_string();
@@ -271,6 +341,7 @@ impl sd_reqo {
                 match j {
                     Some(k) => {
                         url = self.get_string(k, "url".to_string(), url.to_string());
+						model = self.get_string(k, "model".to_string(), model.to_string());
                         steps = self.get_string(k, "steps".to_string(), steps.to_string());
                         width = self.get_string(k, "width".to_string(), width.to_string());
                         height = self.get_string(k, "height".to_string(), height.to_string());
@@ -300,30 +371,30 @@ impl sd_reqo {
             }
 
             let mut json = HashMap::new();
-            json.insert("prompt", arg_prompt.as_str());
-            json.insert("negative_prompt", negative_prompt.as_str());
-            json.insert("steps", steps.as_str());
-            json.insert("width", width.as_str());
-            json.insert("height", height.as_str());
-            json.insert("cfg_scale", cfg_scale.as_str());
-            json.insert("batch_size", batch_size.as_str());
-            json.insert("n_iter", n_iter.as_str());
-            json.insert("sampler_index", sampler_index.as_str());
-            json.insert("tiling", tiling.as_str());
-            json.insert("restore_faces", restore_faces.as_str());
-            json.insert("denoising_strength", denoising_strength.as_str());
-            json.insert("firstphase_width", firstphase_width.as_str());
-            json.insert("firstphase_height", firstphase_height.as_str());
-            json.insert("seed", seed.as_str());
-            json.insert("subseed", subseed.as_str());
-            json.insert("subseed_strength", subseed_strength.as_str());
-            json.insert("seed_resize_from_h", seed_resize_from_h.as_str());
-            json.insert("seed_resize_from_w", seed_resize_from_w.as_str());
-            json.insert("eta", eta.as_str());
-            json.insert("s_churn", s_churn.as_str());
-            json.insert("s_tmax", s_tmax.as_str());
-            json.insert("s_tmin", s_tmin.as_str());
-            json.insert("s_noise", s_noise.as_str());
+            json.insert("prompt".to_string(), arg_prompt.to_string());
+            json.insert("negative_prompt".to_string(), negative_prompt.to_string());
+            json.insert("steps".to_string(), steps.to_string());
+            json.insert("width".to_string(), width.to_string());
+            json.insert("height".to_string(), height.to_string());
+            json.insert("cfg_scale".to_string(), cfg_scale.to_string());
+            json.insert("batch_size".to_string(), batch_size.to_string());
+            json.insert("n_iter".to_string(), n_iter.to_string());
+            json.insert("sampler_index".to_string(), sampler_index.to_string());
+            json.insert("tiling".to_string(), tiling.to_string());
+            json.insert("restore_faces".to_string(), restore_faces.to_string());
+            json.insert("denoising_strength".to_string(), denoising_strength.to_string());
+            json.insert("firstphase_width".to_string(), firstphase_width.to_string());
+            json.insert("firstphase_height".to_string(), firstphase_height.to_string());
+            json.insert("seed".to_string(), seed.to_string());
+            json.insert("subseed".to_string(), subseed.to_string());
+            json.insert("subseed_strength".to_string(), subseed_strength.to_string());
+            json.insert("seed_resize_from_h".to_string(), seed_resize_from_h.to_string());
+            json.insert("seed_resize_from_w".to_string(), seed_resize_from_w.to_string());
+            json.insert("eta".to_string(), eta.to_string());
+            json.insert("s_churn".to_string(), s_churn.to_string());
+            json.insert("s_tmax".to_string(), s_tmax.to_string());
+            json.insert("s_tmin".to_string(), s_tmin.to_string());
+            json.insert("s_noise".to_string(), s_noise.to_string());
 
             let mut args2:Vec<String> = std::env::args().collect();
             if args2.len() > 0 { args2.remove(0); }
@@ -337,14 +408,29 @@ impl sd_reqo {
                 if json.contains_key(key.as_str()) && x + 1 < args2.len() {
                     json.remove(key.as_str());
 
-                    json.insert(args2[x].as_str(), args2[x + 1].as_str());
+                    json.insert(args2[x].to_string(), args2[x + 1].to_string());
                 } else {
+                    if key.as_str() == "model" && x + 1 < args2.len() {
+						model = args2[x + 1].to_string();
+                        x = x + 2;
+                        continue;
+                    }
                     self.print_help();
                     println!("API does not contain configuration '{}'", key.as_str());
                     return;
                 }
                 x = x + 2;
             }
+			
+			if model.to_string() != String::from("") {
+				let b = self.change_model(model.to_string());
+				if b {
+					println!("Successfully change model to '{}'", model.to_string());
+				} else {
+					println!("Fail change model to '{}'", model.to_string());
+				}
+				thread::sleep(time::Duration::from_secs(5));
+			}
 
             while arg_count > 0 {
                 let url3 = format!("{}/sdapi/v1/txt2img", url.to_string());
@@ -358,7 +444,7 @@ impl sd_reqo {
         }
     }
 
-    fn call_api(&self, url3: String, arg_prompt: &String, json: HashMap<&str, &str>) -> bool {
+    fn call_api(&self, url3: String, arg_prompt: &String, json: HashMap<String, String>) -> bool {
         println!("Requesting {}", url3.to_string());
         let str = http_fast_reqwest::post_json(1, url3.to_string(), "POST".to_string(), json.clone());
         match str {

@@ -4,7 +4,7 @@ use std::{io::Read, collections::hash_map::DefaultHasher};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::hash::{Hash, Hasher};
-use reqwest::{Client, multipart, header::HeaderMap, header::{SET_COOKIE}, header::HeaderName, header::HeaderValue};
+use reqwest::{Body, Client, multipart, header::HeaderMap, header::{SET_COOKIE}, header::HeaderName, header::HeaderValue};
 use std::thread;
 use std::time;
 use std::time::Duration;
@@ -75,7 +75,7 @@ fn equal(s: &MyClient, other: &MyClient) -> bool {
     return false;
 }
 
-pub fn post_json(parallel: i32, url: String, method: String, value2: HashMap<&str, &str, RandomState>) -> Result<String, String> {
+pub fn post_json(parallel: i32, url: String, method: String, h: HashMap<String, String, RandomState>) -> Result<String, String> {
     let mut formx = multipart::Form::new();
 
     let mut headersx = HeaderMap::new();
@@ -87,16 +87,71 @@ pub fn post_json(parallel: i32, url: String, method: String, value2: HashMap<&st
 
     let resp: Result<reqwest::Response, reqwest::Error>;
     if method.to_uppercase() == "POST" {
-        resp = init_c.client.post(url.as_str()).headers(headersx).json(&value2).send();
+        resp = init_c.client.post(url.as_str()).headers(headersx).json(&h).send();
     }
     else if method.to_uppercase() == "PUT" {
-        resp = init_c.client.put(url.as_str()).headers(headersx).json(&value2).send();
+        resp = init_c.client.put(url.as_str()).headers(headersx).json(&h).send();
     }
     else if method.to_uppercase() == "DELETE" {
-        resp = init_c.client.delete(url.as_str()).headers(headersx).json(&value2).send();
+        resp = init_c.client.delete(url.as_str()).headers(headersx).json(&h).send();
     } else {
         resp = init_c.client.get(url.as_str()).headers(headersx).send();
     }
+    
+    {
+        let dd = &mut *CLIENTS.lock().unwrap();
+        _ = dd.remove(&init_c);
+        dd.insert(init_c.to_owned(), false);
+    }
+
+    match resp {
+        Ok(mut rep) => {
+            let cls = rep.headers().get(SET_COOKIE);
+
+            match cls {
+                Some(cl) => {
+                    let _ = cl.to_str();
+                },
+                None => {}
+            }
+
+              let mut repbody = String::from("");
+            _ = rep.read_to_string(&mut repbody);
+
+            return Ok((repbody));
+        }
+        Err(err) => {
+            let mut st = String::from("");
+            match err.status() {
+                Some(s) => st = s.to_string(),
+                None => {}
+            }
+            let s = format!("Error. Status {}, message {}", st, err.to_string());
+            return Err(s);
+        }
+    }
+}
+
+pub fn post_body(parallel: i32, url: String, method: String, content_type: String, bod: String) -> Result<String, String> {
+    let mut formx = multipart::Form::new();
+
+    let mut headersx = HeaderMap::new();
+    let h = HeaderValue::from_str(content_type.as_str());
+    match h {
+        Ok(o) => {
+            headersx.append("Content-Type", o);
+        },
+        Err(x) => {
+            println!("{:?}", x);
+        }
+    }
+
+    let init_c = get_client(parallel);
+    let form = formx;
+
+    let resp: Result<reqwest::Response, reqwest::Error>;
+    let b = Body::from(bod);
+    resp = init_c.client.post(url.as_str()).headers(headersx).body(b).send();
     
     {
         let dd = &mut *CLIENTS.lock().unwrap();

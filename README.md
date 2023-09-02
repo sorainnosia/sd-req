@@ -28,6 +28,7 @@ Argument is a pair of key value, add model argument with the model name to chang
 ```
 {
    "url" : "http://127.0.0.1:7860",
+   "output_path" : "output",
    "negative_prompt" : "",
    "steps" : 20,
    "width" : 512,

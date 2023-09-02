@@ -463,6 +463,28 @@ impl sd_reqo {
                 let jsonx = serde_json::from_str::<Value>(x.as_str());
                 match jsonx {
                     Ok(j) => {
+                        let mut info = "".to_string();
+                        let clx = j.get("info");
+                        println!("{}", j.clone());
+                        match clx
+                        {
+                            Some(cl) => {
+                                match cl.as_str() {
+                                    Some(cc) => {
+                                        info = cc.to_string();
+                                    },
+                                    None => {}
+                                }
+                            },
+                            None => {}
+                        }
+                        
+                        let mut infotext = "".to_string();
+                        let vs = stringops::between(&info, "\"infotexts\": [\"".to_string(), "\"],".to_string(), 1, false);
+                        if vs.len() > 0 { 
+                            infotext = format!(" {}", vs[0].to_string()); 
+                        }
+
                         let arrs = j.get("images");
                         match arrs {
                             Some(ar) => {
@@ -473,7 +495,8 @@ impl sd_reqo {
                                             let ox = x.as_str();
                                             match ox {
                                                 Some(o) => {
-                                                    let b = self.save_image(&output_path, &arg_prompt, o.to_string());
+                                                    let prompt = format!("{}{}", arg_prompt, infotext);
+                                                    let b = self.save_image(&output_path, &prompt, o.to_string());
 
                                                     if b {
                                                         println!("Success saving file");

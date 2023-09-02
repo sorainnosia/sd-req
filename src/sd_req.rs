@@ -249,7 +249,8 @@ impl sd_reqo {
         let mut repeat = false;
         let mut arg_prompt = String::new();
         let mut arg_count = 0;
-
+        
+	self.set_config();
         if args.len() > 0 && args[0].to_string().to_lowercase() == "-h" {
             self.print_help();
             return;
@@ -287,7 +288,6 @@ impl sd_reqo {
         let mut first = true;
         while first || repeat
         {
-            self.set_config();
             if arg_prompt == String::new() {
                 print!("{}", "Input prompt : ");
                 io::stdout().flush().unwrap();

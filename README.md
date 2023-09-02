@@ -53,4 +53,4 @@ Argument is a pair of key value, add model argument with the model name to chang
    "s_noise" : 1
 }
 ```
-Generated with defautl value when not exist, edit to change default configuration such as Enpoint URL.
+Generated with default value when not exist, edit to change default configuration such as Enpoint URL.

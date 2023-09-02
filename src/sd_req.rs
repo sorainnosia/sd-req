@@ -1,13 +1,14 @@
 use chrono::Duration;
 use reqwest;
 use std::collections::{HashMap};
+use std::str::FromStr;
 use std::sync::{Mutex, Arc};
 use std::io;
 use std::env;
 use std::io::*;
 use crate::http::{http_fast_reqwest, path, stringops, types};
 use std::io::Write;
-use serde_json::{Value,Map};
+use serde_json::{Value, Map, json};
 use base64::{*, engine::general_purpose};
 use close_file::Closable;
 use sanitize_filename;
@@ -172,7 +173,7 @@ impl sd_reqo {
     }
 
     fn print_header(&self) {
-        println!("sd-req 0.1.0");
+        println!("sd-req 0.2.0");
         println!("Stable Diffusion WebUI API Requestor");
         println!("");
     }
@@ -240,6 +241,32 @@ impl sd_reqo {
             }
         }
         return false;
+    }
+
+    fn get_value(&self, key: String, o: &Value, v: String) -> Value {
+        let mut value = Value::Null;
+        if o.is_boolean() {
+            if v.to_lowercase() == "true".to_string() {
+                value = Value::Bool(true);
+            } else if v.to_lowercase() == "false".to_string() {
+                value = Value::Bool(false);
+            } else {
+                println!("Invalid bool value {{ {} : {} }}", key.as_str(), v.as_str());
+                return value;
+            }
+        } else if o.is_f64() {
+            let (_, f) = types::str_to_f64(v);
+            value = json!(f);
+        } else if o.is_i64() || o.is_number() {
+            let (_, f) = types::str_to_i64(v);
+            value = json!(f);
+        } else if o.is_string() {
+            value = json!(v.as_str());
+        } else if o.is_u64() {
+            let (_, f) = types::str_to_u64(v);
+            value = json!(f);
+        }
+        return value;
     }
 
     pub fn sdcall(&self) {
@@ -312,93 +339,31 @@ impl sd_reqo {
 
             if arg_count == 0 { arg_count = 1; }
             
-            let mut negative_prompt = String::from("");
 			let mut model = "".to_string();
-            let mut steps = "20".to_string();
-            let mut width = "512".to_string();
-            let mut height = "512".to_string();
-            let mut cfg_scale = "7".to_string();
-            let mut sampler_index = "Euler".to_string();
-            let mut restore_faces = "false".to_string();
-            let mut denoising_strength = "0".to_string();
-            let mut firstphase_width = "0".to_string();
-            let mut firstphase_height = "0".to_string();
-            let mut seed = "-1".to_string();
-            let mut subseed = "-1".to_string();
-            let mut subseed_strength = "0".to_string();
-            let mut seed_resize_from_h = "-1".to_string();
-            let mut seed_resize_from_w = "-1".to_string();
-            let mut s_churn = "0".to_string();
-            let mut s_tmax = "0".to_string();
-            let mut s_tmin = "0".to_string();
-            let mut s_noise = "1".to_string();
-            let mut eta = "0".to_string();
-            let mut tiling = "false".to_string();
-            let mut n_iter = "1".to_string();
-            let mut batch_size = "1".to_string();
             let mut url = String::from("http://127.0.0.1:7860");
             let mut output_path = String::from("output");
+            let mut json = Value::Null;
+            let mut k;
             {
                 let j = &*self.json.lock().unwrap();
                 match j {
-                    Some(k) => {
-                        url = self.get_string(k, "url".to_string(), url.to_string());
-                        output_path = self.get_string(k, "output_path".to_string(), output_path.to_string());
-						model = self.get_string(k, "model".to_string(), model.to_string());
-                        
-                        steps = self.get_string(k, "steps".to_string(), steps.to_string());
-                        width = self.get_string(k, "width".to_string(), width.to_string());
-                        height = self.get_string(k, "height".to_string(), height.to_string());
-                        cfg_scale = self.get_string(k, "cfg_scale".to_string(), cfg_scale.to_string());
-                        sampler_index = self.get_string(k, "sampler_index".to_string(), sampler_index.to_string());
-                        negative_prompt = self.get_string(k, "negative_prompt".to_string(), negative_prompt.to_string());
-                        restore_faces = self.get_string(k, "restore_faces".to_string(), restore_faces.to_string());
-                        tiling = self.get_string(k, "tiling".to_string(), tiling.to_string());
-                        denoising_strength = self.get_string(k, "denoising_strength".to_string(), denoising_strength.to_string());
-                        firstphase_width = self.get_string(k, "firstphase_width".to_string(), firstphase_width.to_string());
-                        firstphase_height = self.get_string(k, "firstphase_heigth".to_string(), firstphase_height.to_string());
-                        seed = self.get_string(k, "seed".to_string(), seed.to_string());
-                        subseed = self.get_string(k, "subseed".to_string(), subseed.to_string());
-                        subseed_strength = self.get_string(k, "subseed_strengh".to_string(), subseed_strength.to_string());
-                        seed_resize_from_h = self.get_string(k, "seed_resize_from_h".to_string(), seed_resize_from_h.to_string());
-                        seed_resize_from_w = self.get_string(k, "seed_resize_from_w".to_string(), seed_resize_from_w.to_string());
-                        s_churn = self.get_string(k, "s_churn".to_string(), s_churn.to_string());
-                        s_tmax = self.get_string(k, "s_tmax".to_string(), s_tmax.to_string());
-                        s_tmin = self.get_string(k, "s_tmin".to_string(), s_tmin.to_string());
-                        s_noise = self.get_string(k, "s_noise".to_string(), s_noise.to_string());
-                        eta = self.get_string(k, "eta".to_string(), eta.to_string());
-                        n_iter = self.get_string(k, "n_iter".to_string(), n_iter.to_string());
-                        batch_size = self.get_string(k, "batch_size".to_string(), batch_size.to_string());
+                    Some(o) => {
+                        k = o.clone();
+                        url = self.get_string(&k, "url".to_string(), url.to_string());
+                        output_path = self.get_string(&k, "output_path".to_string(), output_path.to_string());
+						model = self.get_string(&k, "model".to_string(), model.to_string());
                     },
-                    None => {}
+                    None => {
+                        let temp = Value::from_str("temporary");
+                        match temp {
+                            Ok(t) => {
+                                k = t;
+                            },
+                            Err(x) => { return; }
+                        }
+                    }
                 }
             }
-
-            let mut json = HashMap::new();
-            json.insert("prompt".to_string(), arg_prompt.to_string());
-            json.insert("negative_prompt".to_string(), negative_prompt.to_string());
-            json.insert("steps".to_string(), steps.to_string());
-            json.insert("width".to_string(), width.to_string());
-            json.insert("height".to_string(), height.to_string());
-            json.insert("cfg_scale".to_string(), cfg_scale.to_string());
-            json.insert("batch_size".to_string(), batch_size.to_string());
-            json.insert("n_iter".to_string(), n_iter.to_string());
-            json.insert("sampler_index".to_string(), sampler_index.to_string());
-            json.insert("tiling".to_string(), tiling.to_string());
-            json.insert("restore_faces".to_string(), restore_faces.to_string());
-            json.insert("denoising_strength".to_string(), denoising_strength.to_string());
-            json.insert("firstphase_width".to_string(), firstphase_width.to_string());
-            json.insert("firstphase_height".to_string(), firstphase_height.to_string());
-            json.insert("seed".to_string(), seed.to_string());
-            json.insert("subseed".to_string(), subseed.to_string());
-            json.insert("subseed_strength".to_string(), subseed_strength.to_string());
-            json.insert("seed_resize_from_h".to_string(), seed_resize_from_h.to_string());
-            json.insert("seed_resize_from_w".to_string(), seed_resize_from_w.to_string());
-            json.insert("eta".to_string(), eta.to_string());
-            json.insert("s_churn".to_string(), s_churn.to_string());
-            json.insert("s_tmax".to_string(), s_tmax.to_string());
-            json.insert("s_tmin".to_string(), s_tmin.to_string());
-            json.insert("s_noise".to_string(), s_noise.to_string());
 
             let mut args2:Vec<String> = std::env::args().collect();
             if args2.len() > 0 { args2.remove(0); }
@@ -406,14 +371,11 @@ impl sd_reqo {
             if args2.len() > 0 { args2.remove(0); }
             if args2.len() > 0 { args2.remove(0); }
 
+
             let mut x = 0;
             while x < args2.len() {
                 let key = args2[x].to_string();
-                if json.contains_key(key.as_str()) && x + 1 < args2.len() {
-                    json.remove(key.as_str());
-
-                    json.insert(args2[x].to_string(), args2[x + 1].to_string());
-                } else if key.to_string().to_lowercase() == "model".to_string() && x + 1 < args2.len() {
+                if key.to_string().to_lowercase() == "model".to_string() && x + 1 < args2.len() {
                     model = args2[x + 1].to_string();
                     x = x + 2;
                     continue;
@@ -426,13 +388,38 @@ impl sd_reqo {
                     x = x + 2;
                     continue;
                 } else {
-                    self.print_help();
-                    println!("API does not contain configuration '{}'", key.as_str());
-                    return;
+                    if x + 1 < args2.len() {
+                        let v = args2[x + 1].to_string();
+                        let opt: Option<_> = k.get(key.as_str());
+                        match opt {
+                            Some(o) => {
+                                k[key.as_str()] = self.get_value(key.to_string(), o, v);
+                            },
+                            None => {
+                                self.print_help();
+                                println!("API does not contain configuration '{}'", key.as_str());
+                                return;
+                            }
+                        }
+                    }
                 }
                 x = x + 2;
             }
 			
+            let mut json = Value::Object(Map::new());
+            match k.as_object() {
+                Some(ao) => {
+                    for (key, value) in ao {
+                        if key.to_string() != "output_path".to_string() &&
+                            key.to_string() != "model".to_string() &&
+                            key.to_string() != "url".to_string() {
+                                json[key.as_str()] = value.clone();
+                            }
+                    }
+                },
+                None => {}
+            }
+            
 			if model.to_string() != String::from("") {
 				let b = self.change_model(model.to_string());
 				if b {
@@ -443,11 +430,14 @@ impl sd_reqo {
 				thread::sleep(time::Duration::from_secs(5));
 			}
 
-            while arg_count > 0 {
+            let mut c = 1;
+            println!("Requesting '{}'", format!("{}/sdapi/v1/txt2img", url.to_string()));
+            while c <= arg_count {
+                println!("Request {}", c.to_string());
                 let url3 = format!("{}/sdapi/v1/txt2img", url.to_string());
-                self.call_api(url3.to_string(), &output_path, &arg_prompt, json.clone());
+                self.call_api(url3.to_string(), &output_path, &arg_prompt, &json);
                 
-                arg_count = arg_count - 1;
+                c = c + 1;
             }
 
             arg_prompt = String::from("");
@@ -455,9 +445,19 @@ impl sd_reqo {
         }
     }
 
-    fn call_api(&self, url3: String, output_path: &String, arg_prompt: &String, json: HashMap<String, String>) -> bool {
-        println!("Requesting {}", url3.to_string());
-        let str = http_fast_reqwest::post_json(1, url3.to_string(), "POST".to_string(), json.clone());
+    fn call_api(&self, url3: String, output_path: &String, arg_prompt: &String, json: &Value) -> bool {
+        let body_r = serde_json::to_string(json);
+        let mut body = String::from("");
+        match body_r {
+            Ok(b) => {
+                body = b;
+            },
+            Err(x) => {
+                println!("Invalid json for call_api : {:?}", x);
+                return false;
+            }
+        }
+        let str = http_fast_reqwest::post_body(1, url3.to_string(), "POST".to_string(), "application/json".to_string(), body);
         match str {
             Ok(x) => {
                 let jsonx = serde_json::from_str::<Value>(x.as_str());

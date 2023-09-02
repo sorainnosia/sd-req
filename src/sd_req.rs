@@ -34,7 +34,7 @@ impl sd_reqo {
             "url" : "http://127.0.0.1:7860",
             "output_path" : "output",
 			"model" : "",
-            "negative_prompt" : "",
+            "negative_prompt" : "string",
             "steps" : 20,
             "width" : 512,
             "height" : 512,
@@ -56,7 +56,9 @@ impl sd_reqo {
             "s_churn" : 0,
             "s_tmax" : 0,
             "s_tmin" : 0,
-            "s_noise" : 1
+            "s_noise" : 1,
+            "enable_hr" : false,
+            "styles" : ["string"]
         }"#;
 
         let prog_names: Vec<String> = std::env::args().collect();
@@ -339,7 +341,7 @@ impl sd_reqo {
 
             if arg_count == 0 { arg_count = 1; }
             
-			let mut model = "".to_string();
+            let mut model = "".to_string();
             let mut url = String::from("http://127.0.0.1:7860");
             let mut output_path = String::from("output");
             let mut json = Value::Null;
@@ -351,7 +353,7 @@ impl sd_reqo {
                         k = o.clone();
                         url = self.get_string(&k, "url".to_string(), url.to_string());
                         output_path = self.get_string(&k, "output_path".to_string(), output_path.to_string());
-						model = self.get_string(&k, "model".to_string(), model.to_string());
+                        model = self.get_string(&k, "model".to_string(), model.to_string());
                     },
                     None => {
                         let temp = Value::from_str("temporary");
@@ -370,7 +372,6 @@ impl sd_reqo {
             if args2.len() > 0 { args2.remove(0); }
             if args2.len() > 0 { args2.remove(0); }
             if args2.len() > 0 { args2.remove(0); }
-
 
             let mut x = 0;
             while x < args2.len() {
@@ -420,15 +421,16 @@ impl sd_reqo {
                 None => {}
             }
             
-			if model.to_string() != String::from("") {
-				let b = self.change_model(model.to_string());
-				if b {
-					println!("Successfully change model to '{}'", model.to_string());
-				} else {
-					println!("Fail change model to '{}'", model.to_string());
-				}
-				thread::sleep(time::Duration::from_secs(5));
-			}
+            json["prompt"] = json!(arg_prompt.as_str());
+            if model.to_string() != String::from("") {
+		let b = self.change_model(model.to_string());
+		if b {
+			println!("Successfully change model to '{}'", model.to_string());
+		} else {
+			println!("Fail change model to '{}'", model.to_string());
+		}
+		thread::sleep(time::Duration::from_secs(5));
+            }
 
             let mut c = 1;
             println!("Requesting '{}'", format!("{}/sdapi/v1/txt2img", url.to_string()));
@@ -457,15 +459,16 @@ impl sd_reqo {
                 return false;
             }
         }
+        // println!("{}", body.clone());
         let str = http_fast_reqwest::post_body(1, url3.to_string(), "POST".to_string(), "application/json".to_string(), body);
         match str {
             Ok(x) => {
                 let jsonx = serde_json::from_str::<Value>(x.as_str());
                 match jsonx {
                     Ok(j) => {
+                        // println!("{}", j.clone());
                         let mut info = "".to_string();
                         let clx = j.get("info");
-                        println!("{}", j.clone());
                         match clx
                         {
                             Some(cl) => {
@@ -482,7 +485,7 @@ impl sd_reqo {
                         let mut infotext = "".to_string();
                         let vs = stringops::between(&info, "\"infotexts\": [\"".to_string(), "\"],".to_string(), 1, false);
                         if vs.len() > 0 { 
-                            infotext = format!(" {}", vs[0].to_string()); 
+                            infotext = format!(" ({})", vs[0].to_string()); 
                         }
 
                         let arrs = j.get("images");

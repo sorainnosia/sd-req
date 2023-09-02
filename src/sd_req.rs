@@ -31,6 +31,7 @@ impl sd_reqo {
         let config = r#"
         {
             "url" : "http://127.0.0.1:7860",
+            "output_path" : "output",
 			"model" : "",
             "negative_prompt" : "",
             "steps" : 20,
@@ -78,14 +79,14 @@ impl sd_reqo {
         }
     }
 
-    fn save_image(&self, prompt: &String, mut base64: String) -> bool {
+    fn save_image(&self, output_path: &String, prompt: &String, mut base64: String) -> bool {
         let mut i = 1;
         
         let prompt2 = sanitize_filename::sanitize(prompt);
-        let mut fname = format!("{}/{} - {}.png", "output".to_string(), prompt2.to_string(), i);
+        let mut fname = format!("{}/{} - {}.png", output_path.to_string(), prompt2.to_string(), i);
         while path::is_file_exists(fname.to_string()) {
             i = i + 1;
-            fname = format!("{}/{} - {}.png", "output".to_string(), prompt2.to_string(), i);
+            fname = format!("{}/{} - {}.png", output_path.to_string(), prompt2.to_string(), i);
         }
 
         let i = stringops::index_of(&base64, ",".to_string(), 0, false);
@@ -94,7 +95,7 @@ impl sd_reqo {
             base64 = stringops::substring(&base64, i + 1, c - i - 1);
         }
 
-        path::create_dir_all("output".to_string());
+        path::create_dir_all(output_path.to_string());
         let val = general_purpose::STANDARD.decode(base64);
         match val {
             Ok(x) => {
@@ -336,11 +337,13 @@ impl sd_reqo {
             let mut n_iter = "1".to_string();
             let mut batch_size = "1".to_string();
             let mut url = String::from("http://127.0.0.1:7860");
+            let mut output_path = String::from("output");
             {
                 let j = &*self.json.lock().unwrap();
                 match j {
                     Some(k) => {
                         url = self.get_string(k, "url".to_string(), url.to_string());
+                        output_path = self.get_string(k, "output_path".to_string(), output_path.to_string());
 						model = self.get_string(k, "model".to_string(), model.to_string());
                         steps = self.get_string(k, "steps".to_string(), steps.to_string());
                         width = self.get_string(k, "width".to_string(), width.to_string());
@@ -434,7 +437,7 @@ impl sd_reqo {
 
             while arg_count > 0 {
                 let url3 = format!("{}/sdapi/v1/txt2img", url.to_string());
-                self.call_api(url3.to_string(), &arg_prompt, json.clone());
+                self.call_api(url3.to_string(), &output_path, &arg_prompt, json.clone());
                 
                 arg_count = arg_count - 1;
             }
@@ -444,7 +447,7 @@ impl sd_reqo {
         }
     }
 
-    fn call_api(&self, url3: String, arg_prompt: &String, json: HashMap<String, String>) -> bool {
+    fn call_api(&self, url3: String, output_path: &String, arg_prompt: &String, json: HashMap<String, String>) -> bool {
         println!("Requesting {}", url3.to_string());
         let str = http_fast_reqwest::post_json(1, url3.to_string(), "POST".to_string(), json.clone());
         match str {
@@ -462,7 +465,7 @@ impl sd_reqo {
                                             let ox = x.as_str();
                                             match ox {
                                                 Some(o) => {
-                                                    let b = self.save_image(&arg_prompt, o.to_string());
+                                                    let b = self.save_image(&output_path, &arg_prompt, o.to_string());
 
                                                     if b {
                                                         println!("Success saving file");

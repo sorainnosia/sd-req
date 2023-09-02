@@ -341,7 +341,7 @@ impl sd_reqo {
 
             if arg_count == 0 { arg_count = 1; }
             
-            let mut model = "".to_string();
+			let mut model = "".to_string();
             let mut url = String::from("http://127.0.0.1:7860");
             let mut output_path = String::from("output");
             let mut json = Value::Null;
@@ -353,7 +353,7 @@ impl sd_reqo {
                         k = o.clone();
                         url = self.get_string(&k, "url".to_string(), url.to_string());
                         output_path = self.get_string(&k, "output_path".to_string(), output_path.to_string());
-                        model = self.get_string(&k, "model".to_string(), model.to_string());
+						model = self.get_string(&k, "model".to_string(), model.to_string());
                     },
                     None => {
                         let temp = Value::from_str("temporary");
@@ -372,6 +372,7 @@ impl sd_reqo {
             if args2.len() > 0 { args2.remove(0); }
             if args2.len() > 0 { args2.remove(0); }
             if args2.len() > 0 { args2.remove(0); }
+
 
             let mut x = 0;
             while x < args2.len() {
@@ -422,15 +423,15 @@ impl sd_reqo {
             }
             
             json["prompt"] = json!(arg_prompt.as_str());
-            if model.to_string() != String::from("") {
-		let b = self.change_model(model.to_string());
-		if b {
-			println!("Successfully change model to '{}'", model.to_string());
-		} else {
-			println!("Fail change model to '{}'", model.to_string());
-		}
-		thread::sleep(time::Duration::from_secs(5));
-            }
+			if model.to_string() != String::from("") {
+				let b = self.change_model(model.to_string());
+				if b {
+					println!("Successfully change model to '{}'", model.to_string());
+				} else {
+					println!("Fail change model to '{}'", model.to_string());
+				}
+				thread::sleep(time::Duration::from_secs(5));
+			}
 
             let mut c = 1;
             println!("Requesting '{}'", format!("{}/sdapi/v1/txt2img", url.to_string()));
@@ -445,6 +446,24 @@ impl sd_reqo {
             arg_prompt = String::from("");
             first = false;
         }
+    }
+
+    fn between(&self, str: &String, start: String) -> String{
+        let mut result = String::from("");
+        let ss2 = stringops::between(str, start.to_string(), ",".to_string(), 1, false);
+        if ss2.len() > 0 {
+            result = ss2[0].to_string();
+        } else {
+            let ss3 = stringops::between(str, start.to_string(), ")".to_string(), 1, false);
+            if ss3.len() > 0 {
+                result = ss3[0].to_string();
+            }
+        }
+        let i = stringops::index_of(&result, "\n".to_string(), 0, false);
+        if i >= 0 {
+            result = stringops::substring(&result, 0, i);
+        }
+        return result;
     }
 
     fn call_api(&self, url3: String, output_path: &String, arg_prompt: &String, json: &Value) -> bool {
@@ -498,7 +517,14 @@ impl sd_reqo {
                                             let ox = x.as_str();
                                             match ox {
                                                 Some(o) => {
-                                                    let prompt = format!("{}{}", arg_prompt, infotext);
+                                                    // println!("{}", infotext);
+                                                    let samplerx = self.between(&infotext, "Sampler: ".to_string());
+                                                    let steps = self.between(&infotext, "Steps: ".to_string());
+                                                    let seed = self.between(&infotext, "Seed: ".to_string());
+                                                    let cfg_scale = self.between(&infotext, "CFG scale: ".to_string());
+                                                    let modelx = self.between(&infotext, "Model: ".to_string());
+
+                                                    let prompt = format!("{} (seed={},steps={},cfg_scale={},model={},sampler={})", arg_prompt, seed, steps, cfg_scale, modelx, samplerx);
                                                     let b = self.save_image(&output_path, &prompt, o.to_string());
 
                                                     if b {

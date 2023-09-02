@@ -250,7 +250,7 @@ impl sd_reqo {
         let mut arg_prompt = String::new();
         let mut arg_count = 0;
         
-	self.set_config();
+        self.set_config();
         if args.len() > 0 && args[0].to_string().to_lowercase() == "-h" {
             self.print_help();
             return;
@@ -345,6 +345,7 @@ impl sd_reqo {
                         url = self.get_string(k, "url".to_string(), url.to_string());
                         output_path = self.get_string(k, "output_path".to_string(), output_path.to_string());
 						model = self.get_string(k, "model".to_string(), model.to_string());
+                        
                         steps = self.get_string(k, "steps".to_string(), steps.to_string());
                         width = self.get_string(k, "width".to_string(), width.to_string());
                         height = self.get_string(k, "height".to_string(), height.to_string());
@@ -412,12 +413,19 @@ impl sd_reqo {
                     json.remove(key.as_str());
 
                     json.insert(args2[x].to_string(), args2[x + 1].to_string());
+                } else if key.to_string().to_lowercase() == "model".to_string() && x + 1 < args2.len() {
+                    model = args2[x + 1].to_string();
+                    x = x + 2;
+                    continue;
+                } else if key.to_string().to_lowercase() == "url".to_string() && x + 1 < args2.len() {
+                    url = args2[x + 1].to_string();
+                    x = x + 2;
+                    continue;
+                } else if key.to_string().to_lowercase() == "output_path".to_string() && x + 1 < args2.len() {
+                    output_path = args2[x + 1].to_string();
+                    x = x + 2;
+                    continue;
                 } else {
-                    if key.as_str() == "model" && x + 1 < args2.len() {
-						model = args2[x + 1].to_string();
-                        x = x + 2;
-                        continue;
-                    }
                     self.print_help();
                     println!("API does not contain configuration '{}'", key.as_str());
                     return;

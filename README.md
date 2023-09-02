@@ -53,7 +53,7 @@ Argument is a pair of key value, add model argument with the model name to chang
    "s_noise" : 1
 }
 ```
-Generated with default value when not exist, edit to change default configuration such as Enpoint URL.
+Generated with default value when not exist, edit to change default configuration such as Endpoint URL.
 
 # Requirement
 Stable Diffusion WebUI need to enable to publish API by adding `COMMANDLINE_ARGS` with `--api` read [here](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Command-Line-Arguments-and-Settings)

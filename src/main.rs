@@ -6,6 +6,6 @@ mod http;
 use sd_req::sd_reqo;
 
 fn main() {
-    let obj = sd_req::sd_reqo::new();
+    let mut obj = sd_req::sd_reqo::new();
     obj.sdcall();
 }

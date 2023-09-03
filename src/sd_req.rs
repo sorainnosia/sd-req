@@ -1,30 +1,24 @@
-use chrono::Duration;
-use reqwest;
 use std::collections::{HashMap};
-use std::str::FromStr;
 use std::sync::{Mutex, Arc};
 use std::io;
-use std::env;
-use std::io::*;
-use crate::http::{http_fast_reqwest, path, stringops, types};
 use std::io::Write;
+use std::thread;
+use std::time;
 use serde_json::{Value, Map, json};
 use base64::{*, engine::general_purpose};
 use close_file::Closable;
 use sanitize_filename;
-use std::thread;
-use std::time;
+use crate::http::{http_fast_reqwest, path, stringops, types, json as json_comlib};
 
 #[derive(Clone, Debug)]
 pub struct sd_reqo {
     pub is_running: Arc<Mutex<bool>>,
-    pub json: Arc<Mutex<Option<Value>>>,
-    pub running_thread: Arc<Mutex<i32>>
+    pub json: Arc<Mutex<Option<Value>>>
 }
 
 impl sd_reqo {
     pub fn new() -> sd_reqo {
-        let obj = sd_reqo { is_running: Arc::new(Mutex::new(false)), json : Arc::new(Mutex::new(None)), running_thread: Arc::new(Mutex::new(0))};
+        let obj = sd_reqo { is_running: Arc::new(Mutex::new(false)), json : Arc::new(Mutex::new(None)) };
         return obj;
     }
 
@@ -34,6 +28,8 @@ impl sd_reqo {
             "url" : "http://127.0.0.1:7860",
             "output_path" : "output",
 			"model" : "",
+            "seed_start" : -1,
+            "seed_end" : -1,
             "negative_prompt" : "string",
             "steps" : 20,
             "width" : 512,
@@ -112,70 +108,19 @@ impl sd_reqo {
                         return true;
                     },
                     Err(x) => {
-                        println!("{:?}", x);
+                        println!("Invalid during file creation: {:?}", x);
                     }
                 }
             },
             Err(x) => {
-                println!("Fail to decode base64, {:?}", x);
+                println!("Fail to decode base64: {:?}", x);
             }
         }
         return false;
     }
 
-    fn get_string(&self, k: &Value, name: String, default: String) -> String {
-        match k.get(name.as_str()) {
-            Some(x) => {
-                match x.as_str() {
-                    Some (y) => {
-                        return y.to_string();
-                    },
-                    None => {}
-                }
-            },
-            None => {}
-        }
-
-        match k.get(name.as_str()) {
-            Some(x) => {
-                match x.as_bool() {
-                    Some (y) => {
-                        return y.to_string();
-                    },
-                    None => {}
-                }
-            },
-            None => {}
-        }
-
-        match k.get(name.as_str()) {
-            Some(x) => {
-                match x.as_i64() {
-                    Some (y) => {
-                        return y.to_string();
-                    },
-                    None => {}
-                }
-            },
-            None => {}
-        }
-
-        match k.get(name.as_str()) {
-            Some(x) => {
-                match x.as_object() {
-                    Some (y) => {
-                        return format!("{:?}", y);
-                    },
-                    None => {}
-                }
-            },
-            None => {}
-        }
-        return default;
-    }
-
     fn print_header(&self) {
-        println!("sd-req 0.2.0");
+        println!("sd-req 0.3.0");
         println!("Stable Diffusion WebUI API Requestor");
         println!("");
     }
@@ -183,13 +128,19 @@ impl sd_reqo {
     fn print_help(&self) {
         self.print_header();
         println!("Arguments");
-        println!("   [repeat/norepeat] [prompt] [count] [CONFIGS..]");
+        println!("   [repeat/norepeat] [prompt] [amount] [CONFIGS...]");
         println!("Example 1");
         println!("   repeat \"rock in a river\" 5");
         println!("Example 2");
         println!("   repeat \"rock in a river\" 1 seed 5 negative_prompt \"sand\" steps 50");
         println!("Example 3");
         println!("   norepeat \"rock in a river\" 1");
+        println!("CONFIGS");
+        println!("   <key> <value>...");
+        println!("   List of key value pair of txt2img json property to override from default config file");
+        println!("CONFIGS also possible to contain following:");
+        println!("   seed_start <value> seed_end <value>");
+        println!("   to start generating image from starting seed_start to ending seed_end");
     }
 
     fn change_model(&self, model: String) -> bool {
@@ -198,7 +149,7 @@ impl sd_reqo {
             let j = &*self.json.lock().unwrap();
             match j {
                 Some(k) => {
-                    url = self.get_string(k, "url".to_string(), url.to_string());
+                    url = json_comlib::get_string(k, "url".to_string(), url.to_string());
                 },
                 None => {}
             }
@@ -212,8 +163,6 @@ impl sd_reqo {
                 match val {
                     Ok(mut v) => {
                         v["sd_model_checkpoint"] = Value::String(model.to_string());
-                        // let mut v2:HashMap<String, String> = HashMap::new();
-                        // v2.insert("sd_model_checkpoint".to_string(), model.to_string());
 
                         let vstr = serde_json::to_string(&v);
                         match vstr {
@@ -224,54 +173,28 @@ impl sd_reqo {
                                         return true;
                                     },
                                     Err(xy) => {
-                                        println!("Invalid result from change_model : {:?}", xy);
+                                        println!("Invalid result from change_model: {:?}", xy);
                                     }
                                 }
                             },
                             Err(xz) => {
-                                println!("Invalid json to string : {:?}", xz);
+                                println!("Invalid during conversion json to string: {:?}", xz);
                             }
                         }
                     },
                     Err(xu) => {
-                        println!("Invalid options json : {:?}", xu);
+                        println!("Invalid during conversion of options API response to json: {:?}", xu);
                     }
                 }
             },
             Err(xr) => { 
-                println!("No json returned from options : {}", xr);
+                println!("Invalid Response of options API: {}", xr);
             }
         }
         return false;
     }
 
-    fn get_value(&self, key: String, o: &Value, v: String) -> Value {
-        let mut value = Value::Null;
-        if o.is_boolean() {
-            if v.to_lowercase() == "true".to_string() {
-                value = Value::Bool(true);
-            } else if v.to_lowercase() == "false".to_string() {
-                value = Value::Bool(false);
-            } else {
-                println!("Invalid bool value {{ {} : {} }}", key.as_str(), v.as_str());
-                return value;
-            }
-        } else if o.is_f64() {
-            let (_, f) = types::str_to_f64(v);
-            value = json!(f);
-        } else if o.is_i64() || o.is_number() {
-            let (_, f) = types::str_to_i64(v);
-            value = json!(f);
-        } else if o.is_string() {
-            value = json!(v.as_str());
-        } else if o.is_u64() {
-            let (_, f) = types::str_to_u64(v);
-            value = json!(f);
-        }
-        return value;
-    }
-
-    pub fn sdcall(&self) {
+    pub fn sdcall(&mut self) {
         let mut args:Vec<String> = std::env::args().collect();
         args.remove(0);
 
@@ -304,27 +227,29 @@ impl sd_reqo {
         }
         if args.len() > 2 {
             let x = args[2].to_string();
-            let mut b = false;
-            (b, arg_count) = types::str_to_i32(x);
+            let (b, r) = types::str_to_i32(x);
             
-            if b == false || arg_count <= 0 {
+            if b == false || (b && r <= 0) {
                 self.print_help();
                 println!("Argument 3 '{}': should be positive integer count", args[2].to_string());
                 return;
+            } else {
+                arg_count = r;
             }
         }
 
-        let mut first = true;
-        while first || repeat
         {
+            *self.is_running.lock().unwrap() = true;
+        }
+        let mut first = true;
+        while first || repeat {
             if arg_prompt == String::new() {
                 print!("{}", "Input prompt : ");
                 io::stdout().flush().unwrap();
-                let mut prompt = String::new();
                 io::stdin().read_line(&mut arg_prompt)
                     .expect("failed to read from stdin");    
             }
-            if arg_prompt.to_string() == String::from("\r\n") {
+            if arg_prompt.to_string() == stringops::enter() {
                 println!("End");
                 break;
             }
@@ -336,7 +261,13 @@ impl sd_reqo {
                 io::stdin().read_line(&mut input_text)
                     .expect("failed to read from stdin");
             
-                (_, arg_count) = types::str_to_i32(input_text.trim().to_string());
+                let (b, r) = types::str_to_i32(input_text.trim().to_string());
+                if b == false || (b && r <= 0) {
+                    println!("[amount] need to be greater than 0");
+                    break;
+                } else {
+                    arg_count = r;
+                }
             }
 
             if arg_count == 0 { arg_count = 1; }
@@ -344,25 +275,30 @@ impl sd_reqo {
 			let mut model = "".to_string();
             let mut url = String::from("http://127.0.0.1:7860");
             let mut output_path = String::from("output");
-            let mut json = Value::Null;
+            let mut seed_start = -1;
+            let mut seed_end = -1;
             let mut k;
             {
                 let j = &*self.json.lock().unwrap();
                 match j {
                     Some(o) => {
                         k = o.clone();
-                        url = self.get_string(&k, "url".to_string(), url.to_string());
-                        output_path = self.get_string(&k, "output_path".to_string(), output_path.to_string());
-						model = self.get_string(&k, "model".to_string(), model.to_string());
+                        url = json_comlib::get_string(&k, "url".to_string(), url.to_string());
+                        output_path = json_comlib::get_string(&k, "output_path".to_string(), output_path.to_string());
+						model = json_comlib::get_string(&k, "model".to_string(), model.to_string());
+                        let seed_start_str = json_comlib::get_string(&k, "seed_start".to_string(), model.to_string());
+                        let seed_end_str = json_comlib::get_string(&k, "seed_end".to_string(), model.to_string());
+                        let (b, r) = types::str_to_i64(seed_start_str);
+                        if (b && r >= 0) || b == false {
+                            seed_start = r;
+                        }
+                        let (b2, r2) = types::str_to_i64(seed_end_str);
+                        if (b2 && r2 >= 0) || b2 == false {
+                            seed_end = r;
+                        }
                     },
                     None => {
-                        let temp = Value::from_str("temporary");
-                        match temp {
-                            Ok(t) => {
-                                k = t;
-                            },
-                            Err(x) => { return; }
-                        }
+                        k = Value::Object(Map::new());
                     }
                 }
             }
@@ -372,7 +308,6 @@ impl sd_reqo {
             if args2.len() > 0 { args2.remove(0); }
             if args2.len() > 0 { args2.remove(0); }
             if args2.len() > 0 { args2.remove(0); }
-
 
             let mut x = 0;
             while x < args2.len() {
@@ -389,23 +324,51 @@ impl sd_reqo {
                     output_path = args2[x + 1].to_string();
                     x = x + 2;
                     continue;
+                } else if key.to_string().to_lowercase() == "seed_start".to_string() && x + 1 < args2.len() {
+                    let seed_start_str = args2[x + 1].to_string();
+                    let (b, r) = types::str_to_i64(seed_start_str);
+                    if (b && r < 0) || b == false {
+                        println!("seed_start need to be greater or equal 0");
+                    }
+                    else {
+                        seed_start = r;
+                    }
+                    x = x + 2;
+                    continue;
+                } else if key.to_string().to_lowercase() == "seed_end".to_string() && x + 1 < args2.len() {
+                    let seed_end_str = args2[x + 1].to_string();
+                    let (b, r) = types::str_to_i64(seed_end_str);
+                    if (b && r < 0) || b == false {
+                        println!("seed_end need to be greater or equal 0");
+                    } else {
+                        seed_end = r;
+                    }
+                    x = x + 2;
+                    continue;
                 } else {
                     if x + 1 < args2.len() {
                         let v = args2[x + 1].to_string();
-                        let opt: Option<_> = k.get(key.as_str());
+                        let opt = k.get(key.as_str());
                         match opt {
                             Some(o) => {
-                                k[key.as_str()] = self.get_value(key.to_string(), o, v);
+                                k[key.as_str()] = json_comlib::get_value(key.to_string(), o, v);
                             },
                             None => {
                                 self.print_help();
                                 println!("API does not contain configuration '{}'", key.as_str());
-                                return;
+                                break;
                             }
                         }
                     }
                 }
                 x = x + 2;
+            }
+
+            if seed_start != -1 && seed_end != -1 {
+                if seed_start > seed_end {
+                    println!("seed_start {} need to be lesser than seed_end {}", seed_start, seed_end);
+                    break;
+                }
             }
 			
             let mut json = Value::Object(Map::new());
@@ -433,12 +396,23 @@ impl sd_reqo {
 				thread::sleep(time::Duration::from_secs(5));
 			}
 
-            let mut c = 1;
+            let mut c:i32 = 1;
             println!("Requesting '{}'", format!("{}/sdapi/v1/txt2img", url.to_string()));
+            let mut jsonc = json.clone();
             while c <= arg_count {
-                println!("Request {}", c.to_string());
-                let url3 = format!("{}/sdapi/v1/txt2img", url.to_string());
-                self.call_api(url3.to_string(), &output_path, &arg_prompt, &json);
+                if seed_start >= 0 && seed_start <= seed_end {
+                    for ss in seed_start..=seed_end {
+                        jsonc["seed"] = json!(ss);
+                        println!("Seed {}", ss);
+                        let url3 = format!("{}/sdapi/v1/txt2img", url.to_string());
+                        self.call_api(url3.to_string(), &output_path, &arg_prompt, &jsonc);
+                    }
+                    break;
+                } else {
+                    println!("Request {}", c.to_string());
+                    let url3 = format!("{}/sdapi/v1/txt2img", url.to_string());
+                    self.call_api(url3.to_string(), &output_path, &arg_prompt, &jsonc);
+                }
                 
                 c = c + 1;
             }
@@ -446,22 +420,28 @@ impl sd_reqo {
             arg_prompt = String::from("");
             first = false;
         }
+        {
+            *self.is_running.lock().unwrap() = false;
+        }
     }
 
     fn between(&self, str: &String, start: String) -> String{
         let mut result = String::from("");
-        let ss2 = stringops::between(str, start.to_string(), ",".to_string(), 1, false);
-        if ss2.len() > 0 {
-            result = ss2[0].to_string();
-        } else {
-            let ss3 = stringops::between(str, start.to_string(), ")".to_string(), 1, false);
-            if ss3.len() > 0 {
-                result = ss3[0].to_string();
-            }
+        let c = stringops::count(&start);
+
+        let mut i = stringops::index_of(str, start.to_string(), 0, false);
+        if i != -1 {
+            i = i + c;
         }
-        let i = stringops::index_of(&result, "\n".to_string(), 0, false);
-        if i >= 0 {
-            result = stringops::substring(&result, 0, i);
+        let mut j = stringops::index_of(str, ",".to_string(), i + 1, false);
+        let k = stringops::index_of(str, ")".to_string(), i + 1, false);
+        let l = stringops::index_of(str, "\n".to_string(), i + 1, false);
+
+        if (k < j && k != -1) || j == -1 { j = k; }
+        if (l < j && l != -1) || j == -1 { j = l; }
+
+        if j != -1 {
+            result = stringops::substring(&str, i, j - i);
         }
         return result;
     }
@@ -474,18 +454,17 @@ impl sd_reqo {
                 body = b;
             },
             Err(x) => {
-                println!("Invalid json for call_api : {:?}", x);
+                println!("Invalid during conversion from json to string for call_api : {:?}", x);
                 return false;
             }
         }
-        // println!("{}", body.clone());
+
         let str = http_fast_reqwest::post_body(1, url3.to_string(), "POST".to_string(), "application/json".to_string(), body);
         match str {
             Ok(x) => {
                 let jsonx = serde_json::from_str::<Value>(x.as_str());
                 match jsonx {
                     Ok(j) => {
-                        // println!("{}", j.clone());
                         let mut info = "".to_string();
                         let clx = j.get("info");
                         match clx
@@ -517,7 +496,6 @@ impl sd_reqo {
                                             let ox = x.as_str();
                                             match ox {
                                                 Some(o) => {
-                                                    // println!("{}", infotext);
                                                     let samplerx = self.between(&infotext, "Sampler: ".to_string());
                                                     let steps = self.between(&infotext, "Steps: ".to_string());
                                                     let seed = self.between(&infotext, "Seed: ".to_string());
@@ -541,12 +519,12 @@ impl sd_reqo {
                                         }
                                     },
                                     None => {
-                                        println!("Couldn't parse json");
+                                        println!("Invalid Response: images is not list");
                                     }
                                 }
                             },
                             None => {
-                                println!("Couldn't parse json");
+                                println!("Invalid Response: not containing 'images'");
                             }
                         }
                     },
@@ -556,7 +534,7 @@ impl sd_reqo {
                 }
             },
             Err(x) => {
-                println!("{:?}", x);
+                println!("Invalid Response: {:?}", x);
             }
         }
         return false;

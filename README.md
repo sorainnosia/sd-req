@@ -1,4 +1,4 @@
-# Stable Diffusion WebUI API Requestor (txt2image)
+# Stable Diffusion WebUI API Requestor (txt2img)
 Calling SD WebUI API using HTTP Request to generate image from command line program. Endpoint, model to use, amount of images to generate, txt2image configuration is configurable.
 
 First run of the binary will generate a configuration file, edit the config file using text editor to configure the default endpoint.

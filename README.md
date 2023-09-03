@@ -5,17 +5,23 @@ First run of the binary will generate a configuration file, edit the config file
 
 # sd-req
 ```
-sd-req 0.1.0
+sd-req 0.2.0
 Stable Diffusion WebUI API Requestor
 
 Arguments
-   [repeat/norepeat] [prompt] [count] [CONFIGS..]
+   [repeat/norepeat] [prompt] [amount] [CONFIGS...]
 Example 1
    repeat "rock in a river" 5
 Example 2
    repeat "rock in a river" 1 seed 5 negative_prompt "sand" steps 50
 Example 3
    norepeat "rock in a river" 1
+CONFIGS
+   <key> <value>...
+   List of key value pair of txt2img json property to override from default config file
+CONFIGS also possible to contain following:
+   seed_start <value> seed_end <value>
+   to start generating image from starting seed_start to ending seed_end
 ```
 
 # Model Configuration

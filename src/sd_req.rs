@@ -418,6 +418,7 @@ impl sd_reqo {
             }
 
             arg_prompt = String::from("");
+            arg_count = 0;
             first = false;
         }
         {

@@ -40,6 +40,30 @@ pub fn get_string(k: &Value, name: String, default: String) -> String {
 
     match k.get(name.as_str()) {
         Some(x) => {
+            match x.as_f64() {
+                Some (y) => {
+                    return y.to_string();
+                },
+                None => {}
+            }
+        },
+        None => {}
+    }
+
+    match k.get(name.as_str()) {
+        Some(x) => {
+            match x.as_u64() {
+                Some (y) => {
+                    return y.to_string();
+                },
+                None => {}
+            }
+        },
+        None => {}
+    }
+
+    match k.get(name.as_str()) {
+        Some(x) => {
             match x.as_object() {
                 Some (y) => {
                     return format!("{:?}", y);

@@ -47,7 +47,10 @@ jobs:
  
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2
- 
+
+      - name: Update
+        run: cargo update
+
       - name: Build Binary
         run: cargo build --verbose --locked --release --target ${{ matrix.target }}
  

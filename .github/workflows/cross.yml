@@ -48,7 +48,7 @@ jobs:
         if: matrix.command == 'cross'
         shell: bash
         run: |
-          cargo install -- --no-confirm cross
+          cargo install cross
  
       - name: Update
         run: cargo update

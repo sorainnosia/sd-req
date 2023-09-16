@@ -55,4 +55,4 @@ jobs:
         run: cargo update
 
       - name: Build Binary
-        run: ${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }}
+        run: cross build --verbose --locked --release --target ${{ matrix.target }}

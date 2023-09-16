@@ -45,8 +45,6 @@ jobs:
       # Only install cross if we need it
       # Install via cargo-binstall which I found faster
       - name: Install Cross
-        if: matrix.command == 'cross'
-        shell: bash
         run: |
           cargo install cross
  

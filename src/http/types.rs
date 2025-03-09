@@ -1,3 +1,4 @@
+#![allow(unused)]
 pub fn i32_to_u32(i: i32) -> u32 {
     let result = i.to_string().parse::<u32>();
     match result {
@@ -17,7 +18,7 @@ pub fn str_to_i32(s: String) -> (bool, i32) {
         Ok(s) => {
             return (true, s);
         },
-        Err(x) => {
+        Err(_x) => {
             return (false, 0);
         }
     }
@@ -29,7 +30,7 @@ pub fn str_to_f64(s: String) -> (bool, f64) {
         Ok(s) => {
             return (true, s);
         },
-        Err(x) => {
+        Err(_x) => {
             return (false, 0.);
         }
     }
@@ -41,7 +42,7 @@ pub fn str_to_i64(s: String) -> (bool, i64) {
         Ok(s) => {
             return (true, s);
         },
-        Err(x) => {
+        Err(_x) => {
             return (false, 0);
         }
     }
@@ -53,7 +54,7 @@ pub fn str_to_u64(s: String) -> (bool, u64) {
         Ok(s) => {
             return (true, s);
         },
-        Err(x) => {
+        Err(_x) => {
             return (false, 0);
         }
     }

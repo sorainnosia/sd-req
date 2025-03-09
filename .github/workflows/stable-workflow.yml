@@ -1,4 +1,4 @@
-name: Rust
+name: Stable
 on: [push]
 
 jobs:
@@ -17,19 +17,41 @@ jobs:
           override: true
 
       - name: Build
-        run: rustup default stable && cargo clean && cargo build --release --target=x86_64-unknown-linux-gnu && strip target/x86_64-unknown-linux-gnu/release/sd-req && mv target/x86_64-unknown-linux-gnu/release/sd-req target/x86_64-unknown-linux-gnu/release/sd-req_linux_x64
+        run: |
+          sudo apt-get install -y gcc-multilib libssl-dev pkg-config libx11-dev
+          export OPENSSL_DIR=usr/local/ssl 
+          export OPENSSL_INCLUDE_DIR=/usr/include
+          export PKG_CONFIG_PATH=usr/lib/x86_64-linux-gnu/pkgconfig
+          export OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
+          rustup update
+          cargo clean 
+          cargo build --release --target=x86_64-unknown-linux-gnu 
+          strip target/x86_64-unknown-linux-gnu/release/sd-req 
+          mv target/x86_64-unknown-linux-gnu/release/sd-req target/x86_64-unknown-linux-gnu/release/sd-req_linux_x64
 
       - name: Upload linux-amd64
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4.3.0
         with: 
           name: sd-req_linux_x64
           path: target/x86_64-unknown-linux-gnu/release/sd-req_linux_x64
           
       - name: Build x86
-        run: rustup default stable && sudo apt-get install gcc-multilib libssl-dev && export OPENSSL_DIR=usr/local/ssl && rustup target install i686-unknown-linux-gnu && cargo clean && cargo build --release --target=i686-unknown-linux-gnu && strip target/i686-unknown-linux-gnu/release/sd-req && mv target/i686-unknown-linux-gnu/release/sd-req target/i686-unknown-linux-gnu/release/sd-req_linux_x86
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get install -y gcc-multilib libssl-dev pkg-config libssl-dev:i386 libx11-dev
+          export OPENSSL_DIR=usr/local/ssl 
+          export OPENSSL_INCLUDE_DIR=/usr/include
+          export PKG_CONFIG_PATH=usr/lib/x86_64-linux-gnu/pkgconfig
+          export OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
+          rustup target install i686-unknown-linux-gnu
+          rustup update
+          cargo clean 
+          cargo build --release --target=i686-unknown-linux-gnu 
+          strip target/i686-unknown-linux-gnu/release/sd-req 
+          mv target/i686-unknown-linux-gnu/release/sd-req target/i686-unknown-linux-gnu/release/sd-req_linux_x86
 
       - name: Upload linux-x86
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4.3.0
         with: 
           name: sd-req_linux_x86
           path: target/i686-unknown-linux-gnu/release/sd-req_linux_x86
@@ -50,24 +72,24 @@ jobs:
 
       - name: Build
         run: |
-          rustup default stable
+          rustup update
           cargo clean
           cargo build --release
       - name: Upload win-x64
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4.3.0
         with: 
           name: sd-req_win_x64.exe
           path: target/release/sd-req.exe
 
       - name: Build
         run: |
-          rustup default stable
+          rustup update
           cargo clean
           rustup target install i686-pc-windows-msvc
           cargo build --release --target=i686-pc-windows-msvc
           
       - name: Upload win-x64
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4.3.0
         with: 
           name: sd-req_win_x86.exe
           path: target/i686-pc-windows-msvc/release/sd-req.exe
@@ -88,10 +110,10 @@ jobs:
           override: true
 
       - name: Build for mac
-        run: rustup default stable && cargo clean && cargo build --release && strip target/release/sd-req && mv target/release/sd-req target/release/sd-req_mac_x64
+        run: rustup update && cargo clean && cargo build --release && strip target/release/sd-req && mv target/release/sd-req target/release/sd-req_mac_x64
 
       - name: Upload mac-x64
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4.3.0
         with: 
           name: sd-req_mac_x64.exe
           path: target/release/sd-req_mac_x64
